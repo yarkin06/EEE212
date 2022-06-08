@@ -1,0 +1,168 @@
+ORG 0
+	acall	CONFIGURE_LCD
+	MOV R0, #08h
+	MOV R1, #40h
+
+KEYBOARD_LOOP:
+	ACALL KEYBOARD
+	MOV @R1, A
+	INC R1
+	ACALL SEND_DATA
+	DJNZ R0, KEYBOARD_LOOP
+	MOV A, #0C0h
+	ACALL SEND_COMMAND
+
+	MOV A, 44h
+	SUBB A, #30h
+	MOV B, #100
+	MUL AB
+	MOV R7, A
+
+	MOV A, 45h
+	SUBB A, #30h
+	MOV B, #10
+	MUL AB
+	ADD A, R7
+	MOV R2, A
+
+	MOV A, 46h
+	SUBB A, #30h
+	ADD A, R2
+	MOV R3, A 
+	
+	MOV DPTR, #LOG_4
+	MOV R6, #4
+HERE:	MOV A, R3
+HERE1:	INC DPTR
+	DJNZ ACC, HERE1
+	DJNZ R6, HERE
+	MOV R5, #4
+	
+OUTPUT:	CLR A
+	MOVC A, @A+DPTR
+	ACALL SEND_DATA
+	INC DPTR
+	DJNZ R5, OUTPUT
+	LJMP LOOP_END
+
+
+ORG 500
+
+LOG_4: DB '0.00','0.00','0.50','0.79','1.00','1.16','1.29','1.40','1.50','1.58','1.66','1.73','1.79','1.85','1.90','1.95','2.00','2.04','2.08','2.12','2.16','2.20','2.23','2.26','2.29','2.32','2.35','2.38','2.40','2.43','2.45','2.48','2.50','2.52','2.54','2.56','2.58','2.60','2.62','2.64','2.66','2.68','2.70','2.71','2.73','2.75','2.76','2.78','2.79','2.81','2.82','2.84','2.85','2.86','2.88','2.89','2.90','2.92','2.93','2.94','2.95','2.97','2.98','2.99','3.00','3.01','3.02','3.03','3.04','3.05','3.06','3.07','3.08','3.09','3.10','3.11','3.12','3.13','3.14','3.15','3.16','3.17','3.18','3.19','3.20','3.20','3.21','3.22','3.23','3.24','3.25','3.25','3.26','3.27','3.28','3.28','3.29','3.30','3.31','3.31','3.32','3.33','3.34','3.34','3.35','3.36','3.36','3.37','3.38','3.38','3.39','3.40','3.40','3.41','3.42','3.42','3.43','3.44','3.44','3.45','3.45','3.46','3.47','3.47','3.48','3.48','3.49','3.49','3.50','3.51','3.51','3.52','3.52','3.53','3.53','3.54','3.54','3.55','3.55','3.56','3.56','3.57','3.57','3.58','3.58','3.59','3.59','3.60','3.60','3.61'
+
+
+CONFIGURE_LCD:	;THIS SUBROUTINE SENDS THE INITIALIZATION COMMANDS TO THE LCD
+	mov a,#38H	;TWO LINES, 5X7 MATRIX
+	acall SEND_COMMAND
+	mov a,#0FH	;DISPLAY ON, CURSOR BLINKING
+	acall SEND_COMMAND
+	mov a,#06H	;INCREMENT CURSOR (SHIFT CURSOR TO RIGHT)
+	acall SEND_COMMAND
+	mov a,#01H	;CLEAR DISPLAY SCREEN
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ret
+
+
+
+SEND_COMMAND:
+	mov p1,a		;THE COMMAND IS STORED IN A, SEND IT TO LCD
+	clr p3.5		;RS=0 BEFORE SENDING COMMAND
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+SEND_DATA:
+	mov p1,a		;SEND THE DATA STORED IN A TO LCD
+	setb p3.5	;RS=1 BEFORE SENDING DATA
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+DELAY:
+	push 0
+	push 1
+	mov r0,#50
+DELAY_OUTER_LOOP:
+	mov r1,#255
+	djnz r1,$
+	djnz r0,DELAY_OUTER_LOOP
+	pop 1
+	pop 0
+	ret
+
+
+KEYBOARD: ;takes the key pressed from the keyboard and puts it to A
+	mov	P0, #0ffh	;makes P0 input
+K1:
+	mov	P2, #0	;ground all rows
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, K1
+K2:
+	acall	DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER
+	sjmp	K2
+KB_OVER:
+	acall DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER1
+	sjmp	K2
+KB_OVER1:
+	mov	P2, #11111110B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_0
+	mov	P2, #11111101B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_1
+	mov	P2, #11111011B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_2
+	mov	P2, #11110111B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_3
+	ljmp	K2
+	
+ROW_0:
+	mov	DPTR, #KCODE0
+	sjmp	KB_FIND
+ROW_1:
+	mov	DPTR, #KCODE1
+	sjmp	KB_FIND
+ROW_2:
+	mov	DPTR, #KCODE2
+	sjmp	KB_FIND
+ROW_3:
+	mov	DPTR, #KCODE3
+KB_FIND:
+	rrc	A
+	jnc	KB_MATCH
+	inc	DPTR
+	sjmp	KB_FIND
+KB_MATCH:
+	clr	A
+	movc	A, @A+DPTR; get ASCII code from the table 
+	ret
+
+;ASCII look-up table 
+KCODE0:	DB	'1', '2', '3', 'l'
+KCODE1:	DB	'4', '5', '6', 'o'
+KCODE2:	DB	'7', '8', '9', 'g'
+KCODE3:	DB	'(', '0', ')', 'D'
+
+LOOP_END: sjmp $
+END

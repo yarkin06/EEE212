@@ -1,0 +1,116 @@
+ORG 0000H
+CYCLE:	CLR A
+	R_D BIT P2.5
+	W_R BIT P2.6
+	INTER BIT P2.7
+	MYDATA EQU P0
+	MOV P0,#0FFH
+	SETB INTER
+ 	CLR W_R
+	LCALL DELAYING
+	SETB W_R
+BACK: 	JB INTER,BACK
+	CLR R_D
+	MOV R1,MYDATA
+
+	MOV A,R1
+	MOV R3,A
+	MOV R5,#4
+	MOV DPTR,#LOOK
+GET1: 	MOV A,R3
+GET2: 	INC DPTR
+	DJNZ ACC,GET2
+	DJNZ R5,GET1
+
+	LCALL CONFIGURE_LCD
+	MOV R2,#4
+HERE1:	CLR A
+	MOVC A,@A+DPTR
+	LCALL SEND_DATA
+	INC DPTR
+	DJNZ R2,HERE1
+
+	MOV A, #'V'
+	LCALL SEND_DATA
+
+	SETB R_D
+	SJMP CYCLE
+
+DELAYING:
+	MOV R4, #250
+CONT:	MOV R6, #250 ;250
+CONT2:	NOP ; 62.5k
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	DJNZ R6, CONT2 ;125k
+	DJNZ R4, CONT ;500
+	RET ;1
+;MY_DELAY:
+;	MOV TMOD,#00010000B
+;	MOV R2,#50
+;AGAIN: 	MOV TL1,#0F0H
+;	MOV TH1,#0D8H
+;	SETB TR1 
+;BACK: 	JNB TF1,BACK 
+;	CLR TR1
+;	CLR TF1 
+;	DJNZ R2,AGAIN
+;	RET
+
+
+
+CONFIGURE_LCD:	;THIS SUBROUTINE SENDS THE INITIALIZATION COMMANDS TO THE LCD
+	mov a,#38H	;TWO LINES, 5X7 MATRIX
+	acall SEND_COMMAND
+	mov a,#0FH	;DISPLAY ON, CURSOR BLINKING
+	acall SEND_COMMAND
+	mov a,#06H	;INCREMENT CURSOR (SHIFT CURSOR TO RIGHT)
+	acall SEND_COMMAND
+	mov a,#01H	;CLEAR DISPLAY SCREEN
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ret
+
+
+
+SEND_COMMAND:
+	mov p1,a		;THE COMMAND IS STORED IN A, SEND IT TO LCD
+	clr p3.5		;RS=0 BEFORE SENDING COMMAND
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+SEND_DATA:
+	mov p1,a		;SEND THE DATA STORED IN A TO LCD
+	setb p3.5	;RS=1 BEFORE SENDING DATA
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+DELAY:
+	push 0
+	push 1
+	mov r0,#50
+DELAY_OUTER_LOOP:
+	mov r1,#255
+	djnz R1,$
+	djnz r0,DELAY_OUTER_LOOP
+	pop 1
+	pop 0
+	ret
+
+ORG 700H
+LOOK: 	DB 	'0.00', '0.01', '0.02', '0.04', '0.05', '0.06', '0.07', '0.08', '0.09', '0.11', '0.12', '0.14', '0.15', '0.16', '0.18', '0.19', '0.20', '0.21', '0.22', '0.23', '0.24', '0.25', '0.26', '0.27', '0.28', '0.29', '0.30', '0.32', '0.33', '0.34', '0.35', '0.36', '0.37', '0.39', '0.40', '0.41', '0.43', '0.44', '0.46', '0.47', '0.48', '0.49', '0.50', '0.51', '0.53', '0.54', '0.55', '0.56', '0.57', '0.58', '0.60', '0.61', '0.62', '0.63', '0.64', '0.66', '0.67', '0.68', '0.69', '0.70', '0.71', '0.72', '0.73', '0.74', '0.75', '0.76', '0.77', '0.78', '0.80', '0.81', '0.82', '0.83', '0.84', '0.85', '0.87', '0.88', '0.89', '0.90', '0.91', '0.92', '0.94', '0.95', '0.96', '0.97', '0.99', '1.00', '1.01', '1.02', '1.04', '1.05', '1.06', '1.08', '1.09', '1.10', '1.11', '1.12', '1.13', '1.15', '1.16', '1.17', '1.18', '1.19', '1.21', '1.22', '1.23', '1.24', '1.25', '1.26', '1.27', '1.28', '1.29', '1.30', '1.31', '1.32', '1.33', '1.35', '1.36', '1.37', '1.38', '1.39', '1.40', '1.42', '1.43', '1.44', '1.45', '1.46', '1.47', '1.49', '1.50', '1.51', '1.52', '1.53', '1.54', '1.56', '1.57', '1.58', '1.59', '1.60', '1.61', '1.63', '1.64', '1.65', '1.66', '1.67', '1.68', '1.70', '1.71', '1.72', '1.74', '1.75', '1.76', '1.77', '1.78', '1.79', '1.80', '1.81', '1.83', '1.84', '1.85', '1.86', '1.87', '1.88', '1.90', '1.91', '1.93', '1.94', '1.95', '1.97', '1.98', '1.99', '2.00', '2.01', '2.02', '2.04', '2.05', '2.06', '2.07', '2.08', '2.09', '2.11', '2.12', '2.13', '2.14', '2.15', '2.16', '2.18', '2.19', '2.20', '2.21', '2.22', '2.23', '2.25', '2.26', '2.27', '2.28', '2.29', '2.30', '2.32', '2.33', '2.34', '2.35', '2.36', '2.38', '2.39', '2.40', '2.41', '2.42', '2.43', '2.45', '2.46', '2.47', '2.48', '2.49', '2.50', '2.52', '2.53', '2.54', '2.55', '2.56', '2.57', '2.59', '2.60', '2.61', '2.62', '2.63', '2.64', '2.66', '2.67', '2.68', '2.69', '2.70', '2.71', '2.73', '2.74', '2.75', '2.76', '2.77', '2.78', '2.80', '2.81', '2.82', '2.83', '2.84', '2.85', '2.87', '2.88', '2.89', '2.90', '2.91', '2.93', '2.94', '2.95', '2.96', '2.97', '2.98', '3.00', '0.00'
+
+END

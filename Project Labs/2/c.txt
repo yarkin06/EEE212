@@ -1,0 +1,505 @@
+ORG 0000h
+	R_D	BIT P2.5
+	W_R	BIT P2.6
+	INTER	BIT P2.7
+	MYDATA	EQU P0
+
+	MOV MYDATA, #0FFh
+	SETB INTER
+
+CYCLE:	LCALL CONFIGURE_LCD
+	MOV R2, #200
+	MOV R0, #20h
+BACK:
+	CLR W_R
+	SETB W_R
+HERE:	JB INTER, HERE
+	CLR R_D
+	LCALL DELAYING
+	MOV A, MYDATA
+	SETB R_D
+	MOV @R0, A
+	INC R0
+	DJNZ R2, BACK
+
+	MOV A, #0
+	MOV R1, A
+	MOV A, #200
+	MOV R2, A
+	MOV A, #20H
+	MOV R0, A
+
+BACK_HIGH:
+	MOV A, @R0
+	INC R0
+	CJNE A, 1, $+3
+	JC HIGH
+	MOV R1, A
+HIGH:	DJNZ R2, BACK_HIGH
+
+
+	MOV A, #255
+	MOV R3, A
+	MOV A, #200
+	MOV R2, A
+	MOV A, #20H
+	MOV R0, A
+
+LOW_BACK:
+	MOV A, @R0
+	INC R0
+	CJNE A, 3, $+3
+	JNC LOW
+	MOV R3, A
+LOW:
+	DJNZ R2, LOW_BACK
+
+	MOV A, R1
+	CLR C
+	SUBB A, R3	
+
+	PUSH ACC
+	MOV DPTR, #LOOKUP
+	MOV B, #5
+	MUL AB
+	ADD A, DPL
+	MOV DPL, A
+	MOV A, B
+	ADDC A, DPH
+	MOV DPH, A
+	MOV R2, #5
+
+	PUSH ACC
+	MOV A, #'A'
+	LCALL SEND_DATA
+	MOV A, #'='
+	LCALL SEND_DATA
+	POP ACC
+AMPLITUDE:
+	CLR A
+	MOVC A, @A+DPTR
+	LCALL SEND_DATA
+	INC DPTR
+	DJNZ R2, AMPLITUDE
+	
+	POP ACC
+	MOV B, #2
+	DIV AB
+	ADD A, R3
+
+	MOV DPTR, #LOOKUP
+	MOV B, #5
+	MUL AB
+	ADD A, DPL
+	MOV DPL, A
+	MOV A, B
+	ADDC A, DPH
+	MOV DPH, A
+	MOV R2, #5
+
+
+	MOV A, #' '
+	LCALL SEND_DATA
+	MOV A, #'O'
+	LCALL SEND_DATA
+	MOV A, #'='
+	LCALL SEND_DATA
+OFFSET:
+	CLR A
+	MOVC A, @A+DPTR
+	LCALL SEND_DATA
+	INC DPTR
+	DJNZ R2, OFFSET
+
+
+	MOV A, #200
+	MOV R2, A
+	MOV A, #20H
+	MOV R0, A
+	CLR A
+	MOV R4, A
+
+
+DUTY:
+	MOV A, @R0
+	PUSH 1
+	XCH A, R1
+	CLR C
+	SUBB A, R1
+	CJNE A, #10, $+3
+	JNC PASS
+	INC R4
+PASS:
+	POP 1
+	INC R0
+	DJNZ R2, DUTY
+
+	MOV A, #0C0h
+	LCALL SEND_COMMAND
+	MOV A, #'D'
+	LCALL SEND_DATA
+	MOV A, #'='
+	LCALL SEND_DATA
+
+	MOV A, R4
+	MOV B, #2
+	DIV AB
+	MOV B, #10
+	DIV AB
+	MOV 10H,B 
+	ORL A, #30h
+	LCALL SEND_DATA
+	MOV A, 10H
+	ORL A, #30h
+	LCALL SEND_DATA
+	MOV A, #'%'
+	LCALL SEND_DATA
+	LCALL DELAYLONG
+	LJMP CYCLE
+DELAYING:
+	PUSH 4
+	PUSH 6
+	MOV R4, #80
+CONT1:	MOV R6, #5
+CONT2:	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	DJNZ R6, CONT2
+	DJNZ R4, CONT1
+	POP 6
+	POP 4
+	RET
+
+DELAYLONG:
+	PUSH 4
+	PUSH 6
+	MOV R4, #250
+CONT12:	MOV R6, #250
+CONT22:	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	NOP
+	DJNZ R6, CONT22
+	DJNZ R4, CONT12
+	POP 6
+	POP 4
+	RET
+
+	CONFIGURE_LCD:	;THIS SUBROUTINE SENDS THE INITIALIZATION COMMANDS TO THE LCD
+	mov a,#38H	;TWO LINES, 5X7 MATRIX
+	acall SEND_COMMAND
+	mov a,#0FH	;DISPLAY ON, CURSOR BLINKING
+	acall SEND_COMMAND
+	mov a,#06H	;INCREMENT CURSOR (SHIFT CURSOR TO RIGHT)
+	acall SEND_COMMAND
+	mov a,#01H	;CLEAR DISPLAY SCREEN
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ret
+
+
+;P1.0-P1.7 ARE CONNECTED TO LCD DATA PINS D0-D7
+;P3.5 IS CONNECTED TO RS
+;P3.6 IS CONNECTED TO R/W
+;P3.7 IS CONNECTED TO E
+
+SEND_COMMAND:	;THIS  SUBROUTINE IS FOR SENDING THE COMMANDS TO LCD
+	mov p1,a		;THE COMMAND IS STORED IN A, SEND IT TO LCD
+	clr p3.5		;RS=0 BEFORE SENDING COMMAND
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY_LCD
+	clr p3.7
+	ret
+
+
+SEND_DATA:	;THIS  SUBROUTINE IS FOR SENDING THE DATA TO BE DISPLAYED
+	mov p1,a		;SEND THE DATA STORED IN A TO LCD
+	setb p3.5	;RS=1 BEFORE SENDING DATA
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY_LCD
+	clr p3.7
+	ret
+
+
+DELAY_LCD:	;A SHORT DELAY SUBROUTINE
+	push 0
+	push 1
+	mov r0,#50
+DELAY_OUTER_LOOP:
+	mov r1,#255
+	djnz r1,$
+	djnz r0,DELAY_OUTER_LOOP
+	pop 1
+	pop 0
+	ret
+
+LOOKUP:
+DB    '0.00V'
+DB    '0.01V'
+DB    '0.02V'
+DB    '0.03V'
+DB    '0.04V'
+DB    '0.05V'
+DB    '0.07V'
+DB    '0.08V'
+DB    '0.09V'
+DB    '0.10V'
+DB    '0.11V'
+DB    '0.12V'
+DB    '0.14V'
+DB    '0.15V'
+DB    '0.16V'
+DB    '0.17V'
+DB    '0.18V'
+DB    '0.20V'
+DB    '0.21V'
+DB    '0.22V'
+DB    '0.23V'
+DB    '0.24V'
+DB    '0.25V'
+DB    '0.27V'
+DB    '0.28V'
+DB    '0.29V'
+DB    '0.30V'
+DB    '0.31V'
+DB    '0.32V'
+DB    '0.34V'
+DB    '0.35V'
+DB    '0.36V'
+DB    '0.37V'
+DB    '0.38V'
+DB    '0.40V'
+DB    '0.41V'
+DB    '0.42V'
+DB    '0.43V'
+DB    '0.44V'
+DB    '0.45V'
+DB    '0.47V'
+DB    '0.48V'
+DB    '0.49V'
+DB    '0.50V'
+DB    '0.51V'
+DB    '0.52V'
+DB    '0.54V'
+DB    '0.55V'
+DB    '0.56V'
+DB    '0.57V'
+DB    '0.58V'
+DB    '0.60V'
+DB    '0.61V'
+DB    '0.62V'
+DB    '0.63V'
+DB    '0.64V'
+DB    '0.65V'
+DB    '0.67V'
+DB    '0.68V'
+DB    '0.69V'
+DB    '0.70V'
+DB    '0.71V'
+DB    '0.72V'
+DB    '0.74V'
+DB    '0.75V'
+DB    '0.76V'
+DB    '0.77V'
+DB    '0.78V'
+DB    '0.80V'
+DB    '0.81V'
+DB    '0.82V'
+DB    '0.83V'
+DB    '0.84V'
+DB    '0.85V'
+DB    '0.87V'
+DB    '0.88V'
+DB    '0.89V'
+DB    '0.90V'
+DB    '0.91V'
+DB    '0.92V'
+DB    '0.94V'
+DB    '0.95V'
+DB    '0.96V'
+DB    '0.97V'
+DB    '0.98V'
+DB    '1.00V'
+DB    '1.01V'
+DB    '1.02V'
+DB    '1.03V'
+DB    '1.04V'
+DB    '1.05V'
+DB    '1.07V'
+DB    '1.08V'
+DB    '1.09V'
+DB    '1.10V'
+DB    '1.11V'
+DB    '1.12V'
+DB    '1.14V'
+DB    '1.15V'
+DB    '1.16V'
+DB    '1.17V'
+DB    '1.18V'
+DB    '1.20V'
+DB    '1.21V'
+DB    '1.22V'
+DB    '1.23V'
+DB    '1.24V'
+DB    '1.25V'
+DB    '1.27V'
+DB    '1.28V'
+DB    '1.29V'
+DB    '1.30V'
+DB    '1.31V'
+DB    '1.32V'
+DB    '1.34V'
+DB    '1.35V'
+DB    '1.36V'
+DB    '1.37V'
+DB    '1.38V'
+DB    '1.40V'
+DB    '1.41V'
+DB    '1.42V'
+DB    '1.43V'
+DB    '1.44V'
+DB    '1.45V'
+DB    '1.47V'
+DB    '1.48V'
+DB    '1.49V'
+DB    '1.50V'
+DB    '1.51V'
+DB    '1.52V'
+DB    '1.54V'
+DB    '1.55V'
+DB    '1.56V'
+DB    '1.57V'
+DB    '1.58V'
+DB    '1.60V'
+DB    '1.61V'
+DB    '1.62V'
+DB    '1.63V'
+DB    '1.64V'
+DB    '1.65V'
+DB    '1.67V'
+DB    '1.68V'
+DB    '1.69V'
+DB    '1.70V'
+DB    '1.71V'
+DB    '1.72V'
+DB    '1.74V'
+DB    '1.75V'
+DB    '1.76V'
+DB    '1.77V'
+DB    '1.78V'
+DB    '1.80V'
+DB    '1.81V'
+DB    '1.82V'
+DB    '1.83V'
+DB    '1.84V'
+DB    '1.85V'
+DB    '1.87V'
+DB    '1.88V'
+DB    '1.89V'
+DB    '1.90V'
+DB    '1.91V'
+DB    '1.92V'
+DB    '1.94V'
+DB    '1.95V'
+DB    '1.96V'
+DB    '1.97V'
+DB    '1.98V'
+DB    '2.00V'
+DB    '2.01V'
+DB    '2.02V'
+DB    '2.03V'
+DB    '2.04V'
+DB    '2.05V'
+DB    '2.07V'
+DB    '2.08V'
+DB    '2.09V'
+DB    '2.10V'
+DB    '2.11V'
+DB    '2.12V'
+DB    '2.14V'
+DB    '2.15V'
+DB    '2.16V'
+DB    '2.17V'
+DB    '2.18V'
+DB    '2.20V'
+DB    '2.21V'
+DB    '2.22V'
+DB    '2.23V'
+DB    '2.24V'
+DB    '2.25V'
+DB    '2.27V'
+DB    '2.28V'
+DB    '2.29V'
+DB    '2.30V'
+DB    '2.31V'
+DB    '2.32V'
+DB    '2.34V'
+DB    '2.35V'
+DB    '2.36V'
+DB    '2.37V'
+DB    '2.38V'
+DB    '2.40V'
+DB    '2.41V'
+DB    '2.42V'
+DB    '2.43V'
+DB    '2.44V'
+DB    '2.45V'
+DB    '2.47V'
+DB    '2.48V'
+DB    '2.49V'
+DB    '2.50V'
+DB    '2.51V'
+DB    '2.52V'
+DB    '2.54V'
+DB    '2.55V'
+DB    '2.56V'
+DB    '2.57V'
+DB    '2.58V'
+DB    '2.60V'
+DB    '2.61V'
+DB    '2.62V'
+DB    '2.63V'
+DB    '2.64V'
+DB    '2.65V'
+DB    '2.67V'
+DB    '2.68V'
+DB    '2.69V'
+DB    '2.70V'
+DB    '2.71V'
+DB    '2.72V'
+DB    '2.74V'
+DB    '2.75V'
+DB    '2.76V'
+DB    '2.77V'
+DB    '2.78V'
+DB    '2.80V'
+DB    '2.81V'
+DB    '2.82V'
+DB    '2.83V'
+DB    '2.84V'
+DB    '2.85V'
+DB    '2.87V'
+DB    '2.88V'
+DB    '2.89V'
+DB    '2.90V'
+DB    '2.91V'
+DB    '2.92V'
+DB    '2.94V'
+DB    '2.95V'
+DB    '2.96V'
+DB    '2.97V'
+DB    '2.98V'
+DB    '3.00V'
+
+
+	END
