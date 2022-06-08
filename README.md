@@ -1,1 +1,1 @@
-# EEE212
+# EEE212 Microprocessors Labs
